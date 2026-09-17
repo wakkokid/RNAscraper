@@ -106,6 +106,7 @@ def parse_args() -> argparse.Namespace:
 def process_company(
     scraper,
     azienda: dict,
+    tipo_procedimento: Optional[str] = None
 ) -> Optional[RNAResult]:
     """
     Elabora una singola azienda:
@@ -118,11 +119,12 @@ def process_company(
     """
     cf = azienda["codice_fiscale"]
     ragione = azienda["ragione_sociale"]
-    logger.info("━━━ Elaborazione: %s (CF: %s) ━━━", ragione, cf)
+    label_proc = tipo_procedimento or "Generale"
+    logger.info("━━━ Elaborazione %s: %s (CF: %s) ━━━", label_proc.upper(), ragione, cf)
 
     downloaded_path: Optional[Path] = None
     try:
-        downloaded_path = scraper.search_and_download(cf)
+        downloaded_path = scraper.search_and_download(cf, tipo_procedimento=tipo_procedimento)
 
         if downloaded_path is None:
             logger.info("  → Nessun aiuto registrato per %s", ragione)
@@ -186,15 +188,22 @@ def run(args: argparse.Namespace) -> int:
         aziende = [a for a in aziende if a["codice_fiscale"] in filter_cfs]
         logger.info("Filtro --only-cf applicato: %d aziende selezionate", len(aziende))
 
-    # ── 3. Lettura stato corrente tab RNA ──────────────────────────────────
+    # ── 3. Lettura stato corrente tab RNA e DeMinimis ───────────────────────
     try:
-        existing_rna = read_rna_tab(sh)
+        existing_rna = read_rna_tab(sh, tab_name="RNA")
     except Exception as e:
         logger.error("Errore lettura tab 'RNA': %s. Procedo con stato vuoto.", e)
         existing_rna = {}
+        
+    try:
+        existing_deminimis = read_rna_tab(sh, tab_name="DeMinimis")
+    except Exception as e:
+        logger.error("Errore lettura tab 'DeMinimis': %s. Procedo con stato vuoto.", e)
+        existing_deminimis = {}
 
     # ── 4. Loop principale: scraping RNA ───────────────────────────────────
-    results: dict[str, Optional[RNAResult]] = {}
+    results_rna: dict[str, Optional[RNAResult]] = {}
+    results_deminimis: dict[str, Optional[RNAResult]] = {}
     headless = not args.headless_off
 
     # Cartella download fissa e visibile (invece di tempfile casuale)
@@ -206,32 +215,52 @@ def run(args: argparse.Namespace) -> int:
         for i, azienda in enumerate(aziende):
             cf = azienda["codice_fiscale"]
             logger.info("[%d/%d] Elaborazione %s...", i + 1, len(aziende), cf)
-            result = process_company(scraper, azienda)
-            results[cf] = result
+            
+            # 1. Ricerca Generale RNA
+            res_rna = process_company(scraper, azienda, tipo_procedimento=None)
+            results_rna[cf] = res_rna
+            
+            # 2. Ricerca De Minimis
+            res_deminimis = process_company(scraper, azienda, tipo_procedimento="De Minimis")
+            results_deminimis[cf] = res_deminimis
 
     # ── 5. Costruzione righe aggiornate ────────────────────────────────────
-    output_rows = build_rna_rows(aziende, results, existing_rna)
-    stats = summarize_changes(output_rows)
+    output_rows_rna = build_rna_rows(aziende, results_rna, existing_rna)
+    output_rows_deminimis = build_rna_rows(aziende, results_deminimis, existing_deminimis)
+    
+    stats_rna = summarize_changes(output_rows_rna)
+    stats_deminimis = summarize_changes(output_rows_deminimis)
 
-    logger.info("─── Riepilogo modifiche ───")
-    logger.info("  Totale aziende:    %d", stats["totale"])
-    logger.info("  Nuovi inserimenti: %d", stats["nuovi"])
-    logger.info("  Totali aggiornati: %d", stats["aggiornati"])
-    logger.info("  Invariati:         %d", stats["invariati"])
+    logger.info("─── Riepilogo modifiche RNA ───")
+    logger.info("  Totale aziende:    %d", stats_rna["totale"])
+    logger.info("  Nuovi inserimenti: %d", stats_rna["nuovi"])
+    logger.info("  Totali aggiornati: %d", stats_rna["aggiornati"])
+    logger.info("  Invariati:         %d", stats_rna["invariati"])
+    
+    logger.info("─── Riepilogo modifiche DeMinimis ───")
+    logger.info("  Totale aziende:    %d", stats_deminimis["totale"])
+    logger.info("  Nuovi inserimenti: %d", stats_deminimis["nuovi"])
+    logger.info("  Totali aggiornati: %d", stats_deminimis["aggiornati"])
+    logger.info("  Invariati:         %d", stats_deminimis["invariati"])
 
     # ── 6. Scrittura su Google Sheets ─────────────────────────────────────
     if args.dry_run:
         logger.info("DRY-RUN: Nessuna scrittura su Google Sheets.")
-        logger.info("Righe che sarebbero state scritte:")
-        for row in output_rows:
-            logger.info("  %s", row)
     else:
         try:
-            ws_rna = get_rna_worksheet(sh)
-            batch_update_rna(ws_rna, output_rows)
+            ws_rna = get_rna_worksheet(sh, tab_name="RNA")
+            batch_update_rna(ws_rna, output_rows_rna, tab_name="RNA")
             logger.info("Tab 'RNA' aggiornato con successo!")
         except Exception as e:
             logger.error("Errore scrittura tab 'RNA': %s", e, exc_info=True)
+            return 1
+            
+        try:
+            ws_deminimis = get_rna_worksheet(sh, tab_name="DeMinimis")
+            batch_update_rna(ws_deminimis, output_rows_deminimis, tab_name="DeMinimis")
+            logger.info("Tab 'DeMinimis' aggiornato con successo!")
+        except Exception as e:
+            logger.error("Errore scrittura tab 'DeMinimis': %s", e, exc_info=True)
             return 1
 
     logger.info("═══════════════════════════════════════════")

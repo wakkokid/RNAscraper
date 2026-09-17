@@ -131,10 +131,10 @@ def build_rna_rows(
                 logger.debug("CF=%s → Nessuna variazione.", cf)
 
         # ── Costruisci riga ─────────────────────────────────────────────────
-        # - CF con prefisso ' per evitare che Google Sheets lo converta in numero perdendo lo 0 iniziale
-        # - Importi passati come float nativi (non stringhe) per evitare che Google Sheets (locale IT)
-        #   li interpreti come formati orari (HH.MM.SS)
-        cf_val = f"'{cf}" if not str(cf).startswith("'") else str(cf)
+        # Con value_input_option="RAW", le stringhe non vengono parsate in numeri,
+        # quindi gli zeri iniziali del CF sono preservati senza bisogno del prefisso "'"
+        # e i float vengono passati come valori numerici corretti.
+        cf_val = str(cf).lstrip("'")
         totale_val = round(float(new_totale), 2)
         ultimi_3a_val = round(float(new_ultimi_3a), 2)
 

@@ -101,27 +101,27 @@ def read_aziende(sh: Spreadsheet) -> list[dict]:
     return aziende
 
 
-def read_rna_tab(sh: Spreadsheet) -> dict[str, dict]:
+def read_rna_tab(sh: Spreadsheet, tab_name: str = "RNA") -> dict[str, dict]:
     """
-    Legge il tab 'RNA' e restituisce un dizionario con chiave = Codice Fiscale.
+    Legge il tab specificato (RNA o DeMinimis) e restituisce un dizionario con chiave = Codice Fiscale.
     Crea il tab se non esiste, inizializzandolo con le intestazioni corrette.
 
     Returns:
         dict { codice_fiscale -> { colonna: valore, ... } }
     """
     try:
-        ws: Worksheet = sh.worksheet("RNA")
+        ws: Worksheet = sh.worksheet(tab_name)
     except gspread.WorksheetNotFound:
-        logger.info("Tab 'RNA' non trovato. Creazione con intestazioni...")
-        ws = sh.add_worksheet(title="RNA", rows=1000, cols=len(RNA_HEADERS))
+        logger.info("Tab '%s' non trovato. Creazione con intestazioni...", tab_name)
+        ws = sh.add_worksheet(title=tab_name, rows=1000, cols=len(RNA_HEADERS))
         ws.append_row(RNA_HEADERS, value_input_option="USER_ENTERED")
-        logger.info("Tab 'RNA' creato.")
+        logger.info("Tab '%s' creato.", tab_name)
         return {}
 
     all_rows = ws.get_all_values()
     if not all_rows or all_rows[0] != RNA_HEADERS:
         # Tab esiste ma le intestazioni sono errate/assenti → le riscriviamo
-        logger.warning("Tab 'RNA' senza header corretto. Inizializzazione...")
+        logger.warning("Tab '%s' senza header corretto. Inizializzazione...", tab_name)
         if not all_rows:
             ws.append_row(RNA_HEADERS, value_input_option="USER_ENTERED")
         else:
@@ -145,26 +145,27 @@ def read_rna_tab(sh: Spreadsheet) -> dict[str, dict]:
             "novita": row[6] if len(row) > 6 else "",
         }
 
-    logger.info("Righe RNA esistenti caricate: %d", len(existing))
+    logger.info("Righe %s esistenti caricate: %d", tab_name, len(existing))
     return existing
 
 
-def get_rna_worksheet(sh: Spreadsheet) -> Worksheet:
-    """Restituisce il worksheet 'RNA' (deve già esistere)."""
-    return sh.worksheet("RNA")
+def get_rna_worksheet(sh: Spreadsheet, tab_name: str = "RNA") -> Worksheet:
+    """Restituisce il worksheet richiesto (deve già esistere)."""
+    return sh.worksheet(tab_name)
 
 
-def batch_update_rna(ws: Worksheet, rows_to_update: list[list]) -> None:
+def batch_update_rna(ws: Worksheet, rows_to_update: list[list], tab_name: str = "RNA") -> None:
     """
-    Sovrascrive l'intero contenuto del tab RNA (eccetto l'header) con i nuovi dati.
+    Sovrascrive l'intero contenuto del tab (eccetto l'header) con i nuovi dati.
     Usa update a blocchi per minimizzare le chiamate API.
 
     Args:
-        ws: il Worksheet RNA
+        ws: il Worksheet
         rows_to_update: lista di righe (list of list) da scrivere dalla riga 2 in poi
+        tab_name: nome del tab (per logging)
     """
     if not rows_to_update:
-        logger.info("Nessun dato da aggiornare su RNA.")
+        logger.info("Nessun dato da aggiornare su %s.", tab_name)
         return
 
     # Cancella tutto il contenuto dalla riga 2 in poi (mantiene header)
@@ -174,8 +175,8 @@ def batch_update_rna(ws: Worksheet, rows_to_update: list[list]) -> None:
     end_row = 1 + total_rows
     range_notation = f"A2:G{end_row}"
 
-    logger.info("Batch update RNA: %d righe → range %s", total_rows, range_notation)
-    ws.update(range_name=range_notation, values=rows_to_update, value_input_option="USER_ENTERED")
+    logger.info("Batch update %s: %d righe → range %s", tab_name, total_rows, range_notation)
+    ws.update(range_name=range_notation, values=rows_to_update, value_input_option="RAW")
 
     # Imposta formato valuta (Euro) con decimali per le colonne C (Totale Contributi) e D (Totale Ultimi 3 Anni)
     try:
@@ -185,5 +186,5 @@ def batch_update_rna(ws: Worksheet, rows_to_update: list[list]) -> None:
     except Exception as e:
         logger.warning("Impossibile applicare formato valuta: %s", e)
 
-    logger.info("Batch update completato.")
+    logger.info("Batch update completato su %s.", tab_name)
 

@@ -169,12 +169,16 @@ class RNAScraper:
 
     # ─── Ricerca e Download ──────────────────────────────────────────────────
 
-    def search_and_download(self, codice_fiscale: str) -> Optional[Path]:
+    def search_and_download(self, codice_fiscale: str, tipo_procedimento: Optional[str] = None) -> Optional[Path]:
         """
         Esegue la ricerca per un Codice Fiscale/P.IVA sul portale RNA.
 
+        Args:
+            codice_fiscale: Il CF o P.IVA da cercare.
+            tipo_procedimento: Opzionale. Se specificato (es. "De Minimis"), filtra la ricerca.
+
         Returns:
-            Path del file XLSX scaricato, oppure None se nessun risultato trovato.
+            Path del file XLSX/CSV scaricato, oppure None se nessun risultato trovato.
 
         Raises:
             Exception in caso di errori di navigazione non recuperabili.
@@ -183,7 +187,7 @@ class RNAScraper:
         assert page is not None
 
         cf = codice_fiscale.strip()
-        logger.info("Ricerca RNA per CF: %s", cf)
+        logger.info("Ricerca RNA per CF: %s (Tipo Procedimento: %s)", cf, tipo_procedimento or "Tutti")
 
         # ── 1. Reset del form: pulisci il campo CF e reinserisci ──────────────
         try:
@@ -192,8 +196,18 @@ class RNAScraper:
             # fill() svuota automaticamente il campo prima di scrivere
             cf_input.fill(cf)
             logger.debug("CF inserito: %r", cf)
+            
+            # Gestione Tipo Procedimento
+            tipp_select = page.locator("#tipp")
+            if tipo_procedimento:
+                tipp_select.select_option(label=tipo_procedimento)
+                logger.debug("Tipo Procedimento impostato a: %r", tipo_procedimento)
+            else:
+                tipp_select.select_option(value="") # Reset al default
+                logger.debug("Tipo Procedimento resettato (nessun filtro)")
+                
         except PlaywrightTimeoutError:
-            logger.error("Input #cfBen non trovato entro %dms!", ELEMENT_TIMEOUT)
+            logger.error("Input #cfBen o #tipp non trovato entro %dms!", ELEMENT_TIMEOUT)
             raise
 
         # ── 2. Snapshot info bar PRIMA del click ─────────────────────────────
@@ -278,7 +292,8 @@ class RNAScraper:
             return None
 
         # ── 6. Download XLSX ──────────────────────────────────────────────────
-        downloaded_path = self._download_xlsx(cf)
+        prefix = "deminimis" if tipo_procedimento == "De Minimis" else "rna"
+        downloaded_path = self._download_xlsx(cf, prefix=prefix)
         self._reset_search()
         return downloaded_path
 
@@ -334,9 +349,9 @@ class RNAScraper:
 
         return False
 
-    def _download_xlsx(self, cf: str) -> Optional[Path]:
+    def _download_xlsx(self, cf: str, prefix: str = "rna") -> Optional[Path]:
         """
-        Clicca sul pulsante 'Scarica XLSX' e intercetta il download.
+        Clicca sul pulsante 'Scarica XLSX/CSV' e intercetta il download.
         Restituisce il Path del file scaricato o None in caso di errore.
         """
         page = self._page
@@ -360,7 +375,7 @@ class RNAScraper:
                     btn.first.click()
 
                 download = download_info.value
-                filename = f"rna_{cf}.{ext}"
+                filename = f"{prefix}_{cf}.{ext}"
                 dest_path = Path(self.download_dir) / filename
 
                 download.save_as(str(dest_path))
