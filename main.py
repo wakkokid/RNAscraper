@@ -204,12 +204,32 @@ def run(args: argparse.Namespace) -> int:
     # ── 4. Loop principale: scraping RNA ───────────────────────────────────
     results_rna: dict[str, Optional[RNAResult]] = {}
     results_deminimis: dict[str, Optional[RNAResult]] = {}
+    scraped_cfs: set[str] = set()
     headless = not args.headless_off
 
     # Cartella download fissa e visibile (invece di tempfile casuale)
     download_dir = Path(__file__).parent / "downloads"
     download_dir.mkdir(exist_ok=True)
     logger.info("File RNA scaricati in: %s", download_dir)
+
+    def do_batch_save():
+        if args.dry_run:
+            logger.info("DRY-RUN: Skip salvataggio batch su Google Sheets.")
+            return
+        logger.info("Salvataggio batch intermedio su Google Sheets...")
+        out_rna = build_rna_rows(aziende, results_rna, existing_rna, scraped_cfs)
+        out_deminimis = build_rna_rows(aziende, results_deminimis, existing_deminimis, scraped_cfs)
+        try:
+            ws_rna = get_rna_worksheet(sh, tab_name="RNA")
+            batch_update_rna(ws_rna, out_rna, tab_name="RNA")
+        except Exception as e:
+            logger.error("Errore scrittura batch tab 'RNA': %s", e)
+            
+        try:
+            ws_deminimis = get_rna_worksheet(sh, tab_name="DeMinimis")
+            batch_update_rna(ws_deminimis, out_deminimis, tab_name="DeMinimis")
+        except Exception as e:
+            logger.error("Errore scrittura batch tab 'DeMinimis': %s", e)
 
     with rna_scraper_session(headless=headless, download_dir=str(download_dir)) as scraper:
         for i, azienda in enumerate(aziende):
@@ -223,10 +243,20 @@ def run(args: argparse.Namespace) -> int:
             # 2. Ricerca De Minimis
             res_deminimis = process_company(scraper, azienda, tipo_procedimento="De Minimis")
             results_deminimis[cf] = res_deminimis
+            
+            scraped_cfs.add(cf)
 
-    # ── 5. Costruzione righe aggiornate ────────────────────────────────────
-    output_rows_rna = build_rna_rows(aziende, results_rna, existing_rna)
-    output_rows_deminimis = build_rna_rows(aziende, results_deminimis, existing_deminimis)
+            # Salva ogni 10 aziende
+            if (i + 1) % 10 == 0:
+                do_batch_save()
+
+    # Salvataggio batch finale per quelle rimanenti (se non multiple di 10)
+    if len(aziende) % 10 != 0:
+        do_batch_save()
+
+    # ── 5. Costruzione righe aggiornate per statistiche finali ─────────────
+    output_rows_rna = build_rna_rows(aziende, results_rna, existing_rna, scraped_cfs)
+    output_rows_deminimis = build_rna_rows(aziende, results_deminimis, existing_deminimis, scraped_cfs)
     
     stats_rna = summarize_changes(output_rows_rna)
     stats_deminimis = summarize_changes(output_rows_deminimis)
@@ -242,26 +272,6 @@ def run(args: argparse.Namespace) -> int:
     logger.info("  Nuovi inserimenti: %d", stats_deminimis["nuovi"])
     logger.info("  Totali aggiornati: %d", stats_deminimis["aggiornati"])
     logger.info("  Invariati:         %d", stats_deminimis["invariati"])
-
-    # ── 6. Scrittura su Google Sheets ─────────────────────────────────────
-    if args.dry_run:
-        logger.info("DRY-RUN: Nessuna scrittura su Google Sheets.")
-    else:
-        try:
-            ws_rna = get_rna_worksheet(sh, tab_name="RNA")
-            batch_update_rna(ws_rna, output_rows_rna, tab_name="RNA")
-            logger.info("Tab 'RNA' aggiornato con successo!")
-        except Exception as e:
-            logger.error("Errore scrittura tab 'RNA': %s", e, exc_info=True)
-            return 1
-            
-        try:
-            ws_deminimis = get_rna_worksheet(sh, tab_name="DeMinimis")
-            batch_update_rna(ws_deminimis, output_rows_deminimis, tab_name="DeMinimis")
-            logger.info("Tab 'DeMinimis' aggiornato con successo!")
-        except Exception as e:
-            logger.error("Errore scrittura tab 'DeMinimis': %s", e, exc_info=True)
-            return 1
 
     logger.info("═══════════════════════════════════════════")
     logger.info("  RNAscraper completato con successo.")

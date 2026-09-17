@@ -70,19 +70,23 @@ def build_rna_rows(
     aziende: list[dict],
     results: dict[str, Optional[RNAResult]],
     existing_rna: dict[str, dict],
+    scraped_cfs: set[str],
 ) -> list[list]:
     """
     Costruisce la lista completa di righe per il tab RNA, pronta per il batch update.
 
     Per ogni azienda nel tab "Aziende":
-      - Se CF non era presente in RNA → "Nuovo inserimento"
-      - Se totali differiscono → "Sì - Totali aggiornati"
-      - Se totali identici → "No"
+      - Se l'azienda non è ancora stata analizzata in questa sessione (non in scraped_cfs),
+        ripristina lo stato precedente da existing_rna.
+      - Se analizzata e CF non era presente in RNA → "Nuovo inserimento"
+      - Se analizzata e totali differiscono → "Sì - Totali aggiornati"
+      - Se analizzata e totali identici → "No"
 
     Args:
         aziende: lista di dict {'ragione_sociale', 'codice_fiscale'} dal tab Aziende
         results: dict CF → RNAResult|None (None = nessun aiuto o errore)
         existing_rna: dict CF → dict (stato precedente tab RNA)
+        scraped_cfs: set di CF già elaborati nel run corrente
 
     Returns:
         Lista di righe [Azienda, CF, Totale, Ultimi3a, Ultimo, Data, Novità]
@@ -93,9 +97,29 @@ def build_rna_rows(
     for azienda in aziende:
         cf = azienda["codice_fiscale"]
         ragione = azienda["ragione_sociale"]
+
+        # Se non l'abbiamo ancora elaborata in questa sessione, manteniamo i dati vecchi
+        if cf not in scraped_cfs:
+            old = existing_rna.get(cf, {})
+            # Se non c'era neanche prima, creiamo una riga vuota
+            cf_val = str(cf).lstrip("'")
+            totale_val = _parse_amount_str(old.get("totale_contributi", "0"))
+            ultimi_3a_val = _parse_amount_str(old.get("totale_ultimi_3_anni", "0"))
+            row = [
+                ragione,
+                cf_val,
+                round(totale_val, 2),
+                round(ultimi_3a_val, 2),
+                old.get("ultimo_contributo", ""),
+                old.get("data_controllo", ""),
+                old.get("novita", ""),
+            ]
+            output_rows.append(row)
+            continue
+
         result: Optional[RNAResult] = results.get(cf)
 
-        # ── Calcola valori da scrivere ──────────────────────────────────────
+        # ── Calcola valori da scrivere (Azienda elaborata) ──────────────────
         if result is None:
             # Nessun aiuto registrato o errore di scraping
             new_totale = 0.0
