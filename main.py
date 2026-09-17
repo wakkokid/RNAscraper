@@ -300,8 +300,15 @@ def run(args: argparse.Namespace) -> int:
                 send_notification(updates_to_send)
             except Exception as e:
                 logger.error("Impossibile inviare l'email di notifica: %s", e)
+    if args.dry_run:
+        logger.info("DRY-RUN: Skip invio email di notifica.")
     else:
         logger.info("Nessun aggiornamento rilevato, nessuna email da inviare.")
+        try:
+            from mailer import send_notification
+            send_notification(updates_to_send)
+        except Exception as e:
+            logger.error("Impossibile inviare l'email di notifica: %s", e)
 
     logger.info("═══════════════════════════════════════════")
     logger.info("  RNAscraper completato con successo.")

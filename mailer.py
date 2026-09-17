@@ -52,8 +52,10 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
         "il bot RNAscraper ha completato la scansione e ha rilevato aggiornamenti sui contributi per le seguenti aziende:",
         ""
     ]
+    body_lines = ["Ciao,"]
     
     total_companies = 0
+    total_companies = sum(len(companies) for _, companies in updates_by_category)
     
     for category, companies in updates_by_category:
         body_lines.append(f"=== Foglio: {category} ===")
@@ -71,6 +73,24 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
     if total_companies == 0:
         logger.info("Nessuna azienda da notificare via mail.")
         return
+        body_lines.append("il bot RNAscraper ha completato la scansione odierna.")
+        body_lines.append("Non sono stati rilevati nuovi contributi o aggiornamenti per nessuna azienda.")
+        subject = "Notifica RNA: Scansione completata (nessuna novità)"
+    else:
+        body_lines.append("il bot RNAscraper ha completato la scansione e ha rilevato aggiornamenti sui contributi per le seguenti aziende:")
+        body_lines.append("")
+        
+        for category, companies in updates_by_category:
+            body_lines.append(f"=== Foglio: {category} ===")
+            for comp in companies:
+                ragione = comp.get("ragione", "Sconosciuta")
+                ultimo = comp.get("ultimo_contributo", "N/D")
+                totale = comp.get("totale", 0.0)
+                
+                body_lines.append(f"• Azienda: {ragione}")
+                body_lines.append(f"  Totale Contributi: € {totale:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                body_lines.append(f"  Ultimo Contributo: {ultimo}")
+                body_lines.append("")
 
     body_lines.append("Puoi verificare i dettagli direttamente su Google Sheets.")
     body_lines.append("Saluti,\nIl Bot RNAscraper")
@@ -80,6 +100,7 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
     msg = EmailMessage()
     msg.set_content(msg_text)
     msg["Subject"] = f"Notifica RNA: Aggiornamenti rilevati per {total_companies} aziende"
+    msg["Subject"] = subject
     msg["From"] = sender_email
     msg["To"] = recipient_email
 
