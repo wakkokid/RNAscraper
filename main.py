@@ -92,6 +92,12 @@ def parse_args() -> argparse.Namespace:
         help="Processa solo i Codici Fiscali indicati (comma-separated). Es: --only-cf CF1,CF2",
     )
     parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Limita l'esecuzione alle prime N aziende (utile per test)",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         default=False,
@@ -188,6 +194,11 @@ def run(args: argparse.Namespace) -> int:
         aziende = [a for a in aziende if a["codice_fiscale"] in filter_cfs]
         logger.info("Filtro --only-cf applicato: %d aziende selezionate", len(aziende))
 
+    # ── Filtro --limit ─────────────────────────────────────────────────────
+    if args.limit and args.limit > 0:
+        aziende = aziende[:args.limit]
+        logger.info("Filtro --limit applicato: %d aziende selezionate", len(aziende))
+
     # ── 3. Lettura stato corrente tab RNA e DeMinimis ───────────────────────
     try:
         existing_rna = read_rna_tab(sh, tab_name="RNA")
@@ -272,6 +283,25 @@ def run(args: argparse.Namespace) -> int:
     logger.info("  Nuovi inserimenti: %d", stats_deminimis["nuovi"])
     logger.info("  Totali aggiornati: %d", stats_deminimis["aggiornati"])
     logger.info("  Invariati:         %d", stats_deminimis["invariati"])
+
+    # ── 6. Invio Email di Notifica ─────────────────────────────────────────
+    updates_to_send = []
+    if stats_rna.get("dettagli_aggiornati"):
+        updates_to_send.append(("Generale (RNA)", stats_rna["dettagli_aggiornati"]))
+    if stats_deminimis.get("dettagli_aggiornati"):
+        updates_to_send.append(("De Minimis", stats_deminimis["dettagli_aggiornati"]))
+
+    if updates_to_send:
+        if args.dry_run:
+            logger.info("DRY-RUN: Skip invio email di notifica.")
+        else:
+            try:
+                from mailer import send_notification
+                send_notification(updates_to_send)
+            except Exception as e:
+                logger.error("Impossibile inviare l'email di notifica: %s", e)
+    else:
+        logger.info("Nessun aggiornamento rilevato, nessuna email da inviare.")
 
     logger.info("═══════════════════════════════════════════")
     logger.info("  RNAscraper completato con successo.")

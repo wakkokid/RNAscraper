@@ -181,16 +181,38 @@ def summarize_changes(rows: list[list]) -> dict:
     Genera un riepilogo delle modifiche effettuate.
 
     Returns:
-        dict con statistiche: nuovi, aggiornati, invariati
+        dict con statistiche: nuovi, aggiornati, invariati e dettagli_aggiornati
     """
-    stats = {"nuovi": 0, "aggiornati": 0, "invariati": 0, "totale": len(rows)}
+    stats = {
+        "nuovi": 0, 
+        "aggiornati": 0, 
+        "invariati": 0, 
+        "totale": len(rows),
+        "dettagli_aggiornati": []
+    }
+    
     for row in rows:
         novita = row[6] if len(row) > 6 else ""
+        ragione = row[0] if len(row) > 0 else "Sconosciuta"
+        totale = float(row[2]) if len(row) > 2 else 0.0
+        ultimo_contributo = row[4] if len(row) > 4 else "N/D"
+        
+        dettaglio = {
+            "ragione": ragione,
+            "totale": totale,
+            "ultimo_contributo": ultimo_contributo
+        }
+        
         if novita == "Nuovo inserimento":
             stats["nuovi"] += 1
+            # Segnala come aggiornamento anche i nuovi inserimenti se hanno dei contributi
+            if totale > 0:
+                stats["dettagli_aggiornati"].append(dettaglio)
         elif "aggiornati" in novita.lower():
             stats["aggiornati"] += 1
+            stats["dettagli_aggiornati"].append(dettaglio)
         else:
             stats["invariati"] += 1
+            
     return stats
 

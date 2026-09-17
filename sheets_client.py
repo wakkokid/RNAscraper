@@ -119,7 +119,7 @@ def read_rna_tab(sh: Spreadsheet, tab_name: str = "RNA") -> dict[str, dict]:
         return {}
 
     all_rows = ws.get_all_values()
-    if not all_rows or all_rows[0] != RNA_HEADERS:
+    if not all_rows or all_rows[0][:len(RNA_HEADERS)] != RNA_HEADERS:
         # Tab esiste ma le intestazioni sono errate/assenti → le riscriviamo
         logger.warning("Tab '%s' senza header corretto. Inizializzazione...", tab_name)
         if not all_rows:
