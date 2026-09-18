@@ -262,7 +262,8 @@ def run(args: argparse.Namespace) -> int:
         except Exception as e:
             logger.error("Errore scrittura batch tab 'DeMinimis': %s", e)
 
-    from sync_engine import _amounts_differ
+    from sync_engine import _amounts_differ, _parse_amount_str
+    from data_processor import RNAResult
     excel_downloads_count = 0
 
     with rna_scraper_session(headless=headless, download_dir=str(download_dir)) as scraper:
@@ -270,28 +271,55 @@ def run(args: argparse.Namespace) -> int:
             cf = azienda["codice_fiscale"]
             logger.info("[%d/%d] Elaborazione %s...", i + 1, len(aziende), cf)
             
+            needs_deminimis = False
+
             # 1. Ricerca Generale RNA
             res_rna = process_company(scraper, azienda, tipo_procedimento=None)
             results_rna[cf] = res_rna
-            if res_rna and excel_downloads_count < 25:
+            if res_rna:
                 old = existing_rna.get(cf, {})
                 t_chg = _amounts_differ(old.get("totale_contributi", "0"), res_rna.totale_contributi)
                 u_chg = _amounts_differ(old.get("totale_ultimi_3_anni", "0"), res_rna.totale_ultimi_3_anni)
-                if (cf not in existing_rna and res_rna.totale_contributi > 0) or t_chg or u_chg:
-                    scraper.download_excel(cf, prefix="rna")
-                    excel_downloads_count += 1
+                is_new = cf not in existing_rna
+                
+                if is_new or t_chg or u_chg:
+                    needs_deminimis = True
+                    if excel_downloads_count < 25 and (t_chg or u_chg or res_rna.totale_contributi > 0):
+                        scraper.download_excel(cf, prefix="rna")
+                        excel_downloads_count += 1
+            else:
+                # Se non trova RNA, controlla se prima c'era (diventato 0)
+                if cf in existing_rna and _parse_amount_str(existing_rna[cf].get("totale_contributi", "0")) > 0:
+                    needs_deminimis = True
             
+            # Se la memoria di DeMinimis per l'azienda è vuota, dobbiamo cercarla comunque
+            if cf not in existing_deminimis:
+                needs_deminimis = True
+
             # 2. Ricerca De Minimis
-            res_deminimis = process_company(scraper, azienda, tipo_procedimento="De Minimis")
-            results_deminimis[cf] = res_deminimis
-            if res_deminimis and excel_downloads_count < 25:
+            if needs_deminimis:
+                res_deminimis = process_company(scraper, azienda, tipo_procedimento="De Minimis")
+                results_deminimis[cf] = res_deminimis
+                if res_deminimis and excel_downloads_count < 25:
+                    old_dem = existing_deminimis.get(cf, {})
+                    t_chg = _amounts_differ(old_dem.get("totale_contributi", "0"), res_deminimis.totale_contributi)
+                    u_chg = _amounts_differ(old_dem.get("totale_ultimi_3_anni", "0"), res_deminimis.totale_ultimi_3_anni)
+                    if (cf not in existing_deminimis and res_deminimis.totale_contributi > 0) or t_chg or u_chg:
+                        scraper.download_excel(cf, prefix="deminimis")
+                        excel_downloads_count += 1
+            else:
+                logger.info("  -> RNA immutato o vuoto. Salto ricerca De Minimis per ottimizzare.")
                 old_dem = existing_deminimis.get(cf, {})
-                t_chg = _amounts_differ(old_dem.get("totale_contributi", "0"), res_deminimis.totale_contributi)
-                u_chg = _amounts_differ(old_dem.get("totale_ultimi_3_anni", "0"), res_deminimis.totale_ultimi_3_anni)
-                if (cf not in existing_deminimis and res_deminimis.totale_contributi > 0) or t_chg or u_chg:
-                    scraper.download_excel(cf, prefix="deminimis")
-                    excel_downloads_count += 1
-            
+                if old_dem:
+                    results_deminimis[cf] = RNAResult(
+                        totale_contributi=_parse_amount_str(old_dem.get("totale_contributi", "0")),
+                        totale_ultimi_3_anni=_parse_amount_str(old_dem.get("totale_ultimi_3_anni", "0")),
+                        ultimo_contributo=old_dem.get("ultimo_contributo", "N/D"),
+                        file_path=""
+                    )
+                else:
+                    results_deminimis[cf] = None
+
             scraped_cfs.add(cf)
 
             # Salva ogni 10 aziende
