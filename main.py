@@ -98,6 +98,12 @@ def parse_args() -> argparse.Namespace:
         help="Limita l'esecuzione alle prime N aziende (utile per test)",
     )
     parser.add_argument(
+        "--resend-email",
+        action="store_true",
+        default=False,
+        help="Ritenta l'invio dell'ultima email usando i dati salvati, senza eseguire lo scraping",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         default=False,
@@ -163,6 +169,20 @@ def run(args: argparse.Namespace) -> int:
     Funzione principale di esecuzione.
     Restituisce exit code: 0 = successo, 1 = errore critico.
     """
+    if args.resend_email:
+        logger.info("=== Modalità RE-INVIO EMAIL ===")
+        try:
+            from mailer import load_email_data, send_notification
+            data = load_email_data()
+            if data is not None:
+                # send_notification si occuperà di salvare e inviare (sovrascrivendo lo stesso json, va bene)
+                send_notification(data)
+            else:
+                logger.error("Dati email non disponibili per il reinvio.")
+        except Exception as e:
+            logger.error("Errore nel reinvio email: %s", e)
+        return 0
+
     logger.info("═══════════════════════════════════════════")
     logger.info("  RNAscraper avviato")
     logger.info("  Dry-run: %s | Headless: %s", args.dry_run, not args.headless_off)

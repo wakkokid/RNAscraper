@@ -15,6 +15,29 @@ from typing import List, Tuple, Dict
 logger = logging.getLogger(__name__)
 
 CONFIG_PATH = Path("PVT/mail_config.json")
+TEMP_DATA_PATH = Path("PVT/last_email_data.json")
+
+def save_email_data(updates_by_category: List[Tuple[str, List[Dict[str, str]]]]) -> None:
+    """Salva i dati da inviare in un file JSON temporaneo."""
+    try:
+        TEMP_DATA_PATH.parent.mkdir(exist_ok=True)
+        with open(TEMP_DATA_PATH, "w", encoding="utf-8") as f:
+            json.dump(updates_by_category, f, indent=2, ensure_ascii=False)
+        logger.info("Dati email salvati temporaneamente in %s", TEMP_DATA_PATH)
+    except Exception as e:
+        logger.error("Errore salvataggio dati email: %s", e)
+
+def load_email_data() -> List[Tuple[str, List[Dict[str, str]]]]:
+    """Carica i dati dal file JSON temporaneo."""
+    if not TEMP_DATA_PATH.exists():
+        logger.error("Nessun dato email precedente trovato in %s", TEMP_DATA_PATH)
+        return []
+    try:
+        with open(TEMP_DATA_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error("Errore lettura dati email da %s: %s", TEMP_DATA_PATH, e)
+        return []
 
 def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]]) -> None:
     """
@@ -24,6 +47,9 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
         updates_by_category: Lista di tuple (Nome Categoria, Lista Dettagli Aziende)
                              es. [("Generale (RNA)", [{"ragione": "...", "totale": 100, ...}])]
     """
+    # Prima salviamo i dati nel json
+    save_email_data(updates_by_category)
+
     if not CONFIG_PATH.exists():
         logger.error("File di configurazione mail non trovato: %s", CONFIG_PATH)
         return
