@@ -118,7 +118,8 @@ def parse_args() -> argparse.Namespace:
 def process_company(
     scraper,
     azienda: dict,
-    tipo_procedimento: Optional[str] = None
+    tipo_procedimento: Optional[str] = None,
+    progress_perc: str = ""
 ) -> Optional[RNAResult]:
     """
     Elabora una singola azienda:
@@ -132,7 +133,8 @@ def process_company(
     cf = azienda["codice_fiscale"]
     ragione = azienda["ragione_sociale"]
     label_proc = tipo_procedimento or "Generale"
-    logger.info("━━━ Elaborazione %s: %s (CF: %s) ━━━", label_proc.upper(), ragione, cf)
+    prefix = f" {progress_perc}" if progress_perc else ""
+    logger.info("━━━%s Elaborazione %s: %s (CF: %s) ━━━", prefix, label_proc.upper(), ragione, cf)
 
     downloaded_path: Optional[Path] = None
     try:
@@ -269,12 +271,13 @@ def run(args: argparse.Namespace) -> int:
     with rna_scraper_session(headless=headless, download_dir=str(download_dir)) as scraper:
         for i, azienda in enumerate(aziende):
             cf = azienda["codice_fiscale"]
+            perc_str = f"{int((i / len(aziende)) * 100)}%"
             logger.info("[%d/%d] Elaborazione %s...", i + 1, len(aziende), cf)
             
             needs_deminimis = False
 
             # 1. Ricerca Generale RNA
-            res_rna = process_company(scraper, azienda, tipo_procedimento=None)
+            res_rna = process_company(scraper, azienda, tipo_procedimento=None, progress_perc=perc_str)
             results_rna[cf] = res_rna
             if res_rna:
                 old = existing_rna.get(cf, {})
@@ -298,7 +301,7 @@ def run(args: argparse.Namespace) -> int:
 
             # 2. Ricerca De Minimis
             if needs_deminimis:
-                res_deminimis = process_company(scraper, azienda, tipo_procedimento="De Minimis")
+                res_deminimis = process_company(scraper, azienda, tipo_procedimento="De Minimis", progress_perc=perc_str)
                 results_deminimis[cf] = res_deminimis
                 if res_deminimis and excel_downloads_count < 25:
                     old_dem = existing_deminimis.get(cf, {})
