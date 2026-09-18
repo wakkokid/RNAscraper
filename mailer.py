@@ -108,6 +108,8 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
 
     # Allega i file Excel (se presenti)
     downloads_dir = Path("downloads")
+    attached_files = set()
+    
     if downloads_dir.exists():
         for category, companies in updates_by_category:
             prefix = "rna" if "RNA" in category else "deminimis"
@@ -115,7 +117,7 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
                 cf = comp.get("cf")
                 if cf:
                     excel_path = downloads_dir / f"{prefix}_{cf}.xlsx"
-                    if excel_path.exists():
+                    if excel_path.exists() and excel_path not in attached_files:
                         try:
                             with open(excel_path, "rb") as f:
                                 file_data = f.read()
@@ -125,6 +127,7 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
                                 subtype='vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
                                 filename=excel_path.name
                             )
+                            attached_files.add(excel_path)
                             logger.debug("Allegato %s alla mail.", excel_path.name)
                         except Exception as e:
                             logger.error("Errore nell'allegare %s: %s", excel_path, e)
