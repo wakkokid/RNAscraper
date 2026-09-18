@@ -42,10 +42,6 @@ def load_email_data() -> List[Tuple[str, List[Dict[str, str]]]]:
 def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]]) -> None:
     """
     Invia un'email con l'elenco delle aziende aggiornate.
-    
-    Args:
-        updates_by_category: Lista di tuple (Nome Categoria, Lista Dettagli Aziende)
-                             es. [("Generale (RNA)", [{"ragione": "...", "totale": 100, ...}])]
     """
     # Prima salviamo i dati nel json
     save_email_data(updates_by_category)
@@ -73,32 +69,11 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
         return
 
     # Costruisci il corpo del messaggio
-    body_lines = [
-        "Ciao,",
-        "il bot RNAscraper ha completato la scansione e ha rilevato aggiornamenti sui contributi per le seguenti aziende:",
-        ""
-    ]
     body_lines = ["Ciao,"]
     
-    total_companies = 0
     total_companies = sum(len(companies) for _, companies in updates_by_category)
     
-    for category, companies in updates_by_category:
-        body_lines.append(f"=== Foglio: {category} ===")
-        for comp in companies:
-            ragione = comp.get("ragione", "Sconosciuta")
-            ultimo = comp.get("ultimo_contributo", "N/D")
-            totale = comp.get("totale", 0.0)
-            
-            body_lines.append(f"• Azienda: {ragione}")
-            body_lines.append(f"  Totale Contributi: € {totale:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            body_lines.append(f"  Ultimo Contributo: {ultimo}")
-            body_lines.append("")
-            total_companies += 1
-            
     if total_companies == 0:
-        logger.info("Nessuna azienda da notificare via mail.")
-        return
         body_lines.append("il bot RNAscraper ha completato la scansione odierna.")
         body_lines.append("Non sono stati rilevati nuovi contributi o aggiornamenti per nessuna azienda.")
         subject = "Notifica RNA: Scansione completata (nessuna novità)"
@@ -127,10 +102,32 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
     
     msg = EmailMessage()
     msg.set_content(msg_text)
-    msg["Subject"] = f"Notifica RNA: Aggiornamenti rilevati per {total_companies} aziende"
     msg["Subject"] = subject
     msg["From"] = sender_email
     msg["To"] = recipient_email
+
+    # Allega i file Excel (se presenti)
+    downloads_dir = Path("downloads")
+    if downloads_dir.exists():
+        for category, companies in updates_by_category:
+            prefix = "rna" if "RNA" in category else "deminimis"
+            for comp in companies:
+                cf = comp.get("cf")
+                if cf:
+                    excel_path = downloads_dir / f"{prefix}_{cf}.xlsx"
+                    if excel_path.exists():
+                        try:
+                            with open(excel_path, "rb") as f:
+                                file_data = f.read()
+                            msg.add_attachment(
+                                file_data, 
+                                maintype='application', 
+                                subtype='vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+                                filename=excel_path.name
+                            )
+                            logger.debug("Allegato %s alla mail.", excel_path.name)
+                        except Exception as e:
+                            logger.error("Errore nell'allegare %s: %s", excel_path, e)
 
     logger.info("Tentativo di invio email a %s tramite %s:%s...", recipient_email, smtp_server, smtp_port)
     try:
@@ -141,4 +138,3 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
         logger.info("Email inviata con successo.")
     except Exception as e:
         logger.error("Errore durante l'invio dell'email: %s", e, exc_info=True)
-

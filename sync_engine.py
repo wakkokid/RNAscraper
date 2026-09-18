@@ -199,6 +199,7 @@ def summarize_changes(rows: list[list]) -> dict:
         
         dettaglio = {
             "ragione": ragione,
+            "cf": row[1] if len(row) > 1 else "",
             "totale": totale,
             "ultimo_contributo": ultimo_contributo
         }

@@ -262,6 +262,9 @@ def run(args: argparse.Namespace) -> int:
         except Exception as e:
             logger.error("Errore scrittura batch tab 'DeMinimis': %s", e)
 
+    from sync_engine import _amounts_differ
+    excel_downloads_count = 0
+
     with rna_scraper_session(headless=headless, download_dir=str(download_dir)) as scraper:
         for i, azienda in enumerate(aziende):
             cf = azienda["codice_fiscale"]
@@ -270,10 +273,24 @@ def run(args: argparse.Namespace) -> int:
             # 1. Ricerca Generale RNA
             res_rna = process_company(scraper, azienda, tipo_procedimento=None)
             results_rna[cf] = res_rna
+            if res_rna and excel_downloads_count < 25:
+                old = existing_rna.get(cf, {})
+                t_chg = _amounts_differ(old.get("totale_contributi", "0"), res_rna.totale_contributi)
+                u_chg = _amounts_differ(old.get("totale_ultimi_3_anni", "0"), res_rna.totale_ultimi_3_anni)
+                if (cf not in existing_rna and res_rna.totale_contributi > 0) or t_chg or u_chg:
+                    scraper.download_excel(cf, prefix="rna")
+                    excel_downloads_count += 1
             
             # 2. Ricerca De Minimis
             res_deminimis = process_company(scraper, azienda, tipo_procedimento="De Minimis")
             results_deminimis[cf] = res_deminimis
+            if res_deminimis and excel_downloads_count < 25:
+                old_dem = existing_deminimis.get(cf, {})
+                t_chg = _amounts_differ(old_dem.get("totale_contributi", "0"), res_deminimis.totale_contributi)
+                u_chg = _amounts_differ(old_dem.get("totale_ultimi_3_anni", "0"), res_deminimis.totale_ultimi_3_anni)
+                if (cf not in existing_deminimis and res_deminimis.totale_contributi > 0) or t_chg or u_chg:
+                    scraper.download_excel(cf, prefix="deminimis")
+                    excel_downloads_count += 1
             
             scraped_cfs.add(cf)
 

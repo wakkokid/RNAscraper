@@ -390,6 +390,31 @@ class RNAScraper:
         logger.error("Impossibile scaricare file per CF=%s", cf)
         return None
 
+    def download_excel(self, cf: str, prefix: str = "rna") -> Optional[Path]:
+        """Scarica esplicitamente l'XLSX senza chiudere i risultati correnti."""
+        page = self._page
+        assert page is not None
+        xlsx_selector = "a.exportbox_link[data-type='xlsx']"
+        try:
+            btn = page.locator(xlsx_selector)
+            if btn.count() == 0:
+                logger.error("Bottone XLSX non trovato per CF=%s", cf)
+                return None
+
+            logger.info("Scaricamento file XLSX per CF=%s ...", cf)
+            with page.expect_download(timeout=DOWNLOAD_TIMEOUT) as download_info:
+                btn.first.click()
+
+            download = download_info.value
+            filename = f"{prefix}_{cf}.xlsx"
+            dest_path = Path(self.download_dir) / filename
+            download.save_as(str(dest_path))
+            logger.info("File XLSX scaricato per allegato: %s", dest_path)
+            return dest_path
+        except Exception as e:
+            logger.error("Errore download XLSX per CF=%s: %s", cf, e)
+            return None
+
     def _reset_search(self) -> None:
         """Pulisce il campo CF per preparare la prossima ricerca."""
         page = self._page
