@@ -314,8 +314,7 @@ def run(args: argparse.Namespace) -> int:
                     results_deminimis[cf] = RNAResult(
                         totale_contributi=_parse_amount_str(old_dem.get("totale_contributi", "0")),
                         totale_ultimi_3_anni=_parse_amount_str(old_dem.get("totale_ultimi_3_anni", "0")),
-                        ultimo_contributo=old_dem.get("ultimo_contributo", "N/D"),
-                        file_path=""
+                        ultimo_contributo=old_dem.get("ultimo_contributo", "N/D")
                     )
                 else:
                     results_deminimis[cf] = None
