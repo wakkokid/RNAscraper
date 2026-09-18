@@ -22,6 +22,7 @@ Opzioni:
 
 import argparse
 import logging
+import signal
 import sys
 from pathlib import Path
 from typing import Optional
@@ -37,6 +38,15 @@ from sheets_client import (
     read_rna_tab,
 )
 from sync_engine import build_rna_rows, summarize_changes
+
+abort_requested = False
+
+def handle_signal(signum, frame):
+    global abort_requested
+    if not abort_requested:
+        abort_requested = True
+        logger = logging.getLogger(__name__)
+        logger.warning("\n[!] Ricevuto segnale di stop (Ctrl+C o kill). Il bot si fermerà in modo pulito alla fine dell'azienda corrente...")
 
 # ─── Logging Setup ───────────────────────────────────────────────────────────
 
@@ -268,8 +278,20 @@ def run(args: argparse.Namespace) -> int:
     from data_processor import RNAResult
     excel_downloads_count = 0
 
+    global abort_requested
+    abort_requested = False
+    try:
+        signal.signal(signal.SIGINT, handle_signal)
+        signal.signal(signal.SIGTERM, handle_signal)
+    except Exception as e:
+        logger.debug("Impossibile registrare gli handler di segnale: %s", e)
+
     with rna_scraper_session(headless=headless, download_dir=str(download_dir)) as scraper:
         for i, azienda in enumerate(aziende):
+            if abort_requested:
+                logger.warning("Interruzione confermata. Uscita anticipata dal ciclo di scraping...")
+                break
+                
             cf = azienda["codice_fiscale"]
             perc_str = f"{int((i / len(aziende)) * 100)}%"
             logger.info("[%d/%d] Elaborazione %s...", i + 1, len(aziende), cf)
@@ -328,11 +350,11 @@ def run(args: argparse.Namespace) -> int:
             if (i + 1) % 10 == 0:
                 do_batch_save()
 
-    # Salvataggio batch finale per quelle rimanenti (se non multiple di 10)
-    if len(aziende) % 10 != 0:
+    # Salvataggio batch finale per quelle rimanenti (o in caso di abort)
+    if len(scraped_cfs) > 0 and (len(scraped_cfs) % 10 != 0 or abort_requested):
         do_batch_save()
 
-    # ── 5. Costruzione righe aggiornate per statistiche finali ─────────────
+    # ─── 5. Costruzione righe aggiornate per statistiche finali ──────────────
     output_rows_rna = build_rna_rows(aziende, results_rna, existing_rna, scraped_cfs)
     output_rows_deminimis = build_rna_rows(aziende, results_deminimis, existing_deminimis, scraped_cfs)
     
