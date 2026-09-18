@@ -181,6 +181,14 @@ def run(args: argparse.Namespace) -> int:
     Funzione principale di esecuzione.
     Restituisce exit code: 0 = successo, 1 = errore critico.
     """
+    global abort_requested
+    abort_requested = False
+    try:
+        signal.signal(signal.SIGINT, handle_signal)
+        signal.signal(signal.SIGTERM, handle_signal)
+    except Exception as e:
+        logger.debug("Impossibile registrare gli handler di segnale: %s", e)
+
     if args.resend_email:
         logger.info("=== Modalità RE-INVIO EMAIL ===")
         try:
@@ -200,20 +208,26 @@ def run(args: argparse.Namespace) -> int:
     logger.info("  Dry-run: %s | Headless: %s", args.dry_run, not args.headless_off)
     logger.info("═══════════════════════════════════════════")
 
-    # ── 1. Autenticazione e lettura Google Sheets ──────────────────────────
+    # ─── 2. Autenticazione e Lettura Input ───────────────────────────────────
     try:
+        logger.info("Autenticazione Google Sheets...")
         gc = get_client()
+        logger.info("Autenticazione completata.")
+        
+        if abort_requested:
+            logger.warning("Interruzione durante l'avvio. Chiusura script.")
+            return 0
+            
         sh = open_spreadsheet(gc)
         logger.info("Spreadsheet aperto con successo.")
-    except Exception as e:
-        logger.critical("Errore connessione Google Sheets: %s", e, exc_info=True)
-        return 1
+        
+        if abort_requested:
+            logger.warning("Interruzione durante l'avvio. Chiusura script.")
+            return 0
 
-    # ── 2. Lettura lista aziende ───────────────────────────────────────────
-    try:
         aziende = read_aziende(sh)
     except Exception as e:
-        logger.critical("Errore lettura tab 'Aziende': %s", e, exc_info=True)
+        logger.critical("Errore connessione Google Sheets: %s", e, exc_info=True)
         return 1
 
     if not aziende:
@@ -277,14 +291,6 @@ def run(args: argparse.Namespace) -> int:
     from sync_engine import _amounts_differ, _parse_amount_str
     from data_processor import RNAResult
     excel_downloads_count = 0
-
-    global abort_requested
-    abort_requested = False
-    try:
-        signal.signal(signal.SIGINT, handle_signal)
-        signal.signal(signal.SIGTERM, handle_signal)
-    except Exception as e:
-        logger.debug("Impossibile registrare gli handler di segnale: %s", e)
 
     with rna_scraper_session(headless=headless, download_dir=str(download_dir)) as scraper:
         for i, azienda in enumerate(aziende):
