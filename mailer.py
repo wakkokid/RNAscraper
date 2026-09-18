@@ -92,6 +92,8 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
                 body_lines.append(f"  Ultimo Contributo: {ultimo}")
                 body_lines.append("")
 
+        subject = f"Notifica RNA: Aggiornamenti rilevati per {total_companies} aziende"
+
     body_lines.append("Puoi verificare i dettagli direttamente su Google Sheets.")
     body_lines.append("Saluti,\nIl Bot RNAscraper")
     
