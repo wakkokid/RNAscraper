@@ -112,12 +112,15 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
     attached_files = set()
     
     if downloads_dir.exists():
+        from enhance_excel import enhance_excel_with_deminimis
         for category, companies in updates_by_category:
-            prefix = "rna" if "RNA" in category else "deminimis"
             for comp in companies:
                 cf = comp.get("cf")
                 if cf:
-                    excel_path = downloads_dir / f"{prefix}_{cf}.xlsx"
+                    enhance_excel_with_deminimis(cf, downloads_dir)
+                    excel_path = downloads_dir / f"rna_{cf}.xlsx"
+                    if not excel_path.exists():
+                        excel_path = downloads_dir / f"deminimis_{cf}.xlsx"
                     if excel_path.exists() and excel_path not in attached_files:
                         try:
                             with open(excel_path, "rb") as f:
