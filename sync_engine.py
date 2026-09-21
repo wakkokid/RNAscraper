@@ -113,6 +113,7 @@ def build_rna_rows(
                 old.get("ultimo_contributo", ""),
                 old.get("data_controllo", ""),
                 old.get("novita", ""),
+                round(_parse_amount_str(old.get("variazione", "0")), 2),
             ]
             output_rows.append(row)
             continue
@@ -133,9 +134,12 @@ def build_rna_rows(
         # ── Determina Novità ────────────────────────────────────────────────
         if cf not in existing_rna:
             novita = "Nuovo inserimento"
+            variazione = new_ultimi_3a
             logger.info("CF=%s → NUOVO INSERIMENTO", cf)
         else:
             old = existing_rna[cf]
+            old_ultimi_3a = _parse_amount_str(old.get("totale_ultimi_3_anni", "0"))
+            variazione = new_ultimi_3a - old_ultimi_3a
             totale_changed = _amounts_differ(old.get("totale_contributi", "0"), new_totale)
             ultimi_changed = _amounts_differ(old.get("totale_ultimi_3_anni", "0"), new_ultimi_3a)
 
@@ -170,6 +174,7 @@ def build_rna_rows(
             new_ultimo,
             today,
             novita,
+            round(float(variazione), 2),
         ]
         output_rows.append(row)
 
@@ -196,12 +201,14 @@ def summarize_changes(rows: list[list]) -> dict:
         ragione = row[0] if len(row) > 0 else "Sconosciuta"
         totale = float(row[2]) if len(row) > 2 else 0.0
         ultimo_contributo = row[4] if len(row) > 4 else "N/D"
+        variazione = float(row[7]) if len(row) > 7 else 0.0
         
         dettaglio = {
             "ragione": ragione,
             "cf": row[1] if len(row) > 1 else "",
             "totale": totale,
-            "ultimo_contributo": ultimo_contributo
+            "ultimo_contributo": ultimo_contributo,
+            "variazione": variazione
         }
         
         if novita == "Nuovo inserimento":

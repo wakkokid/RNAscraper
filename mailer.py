@@ -88,6 +88,10 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
                 ultimo = comp.get("ultimo_contributo", "N/D")
                 totale = comp.get("totale", 0.0)
                 cf = comp.get("cf", "N/D")
+                variazione = comp.get("variazione", 0.0)
+                
+                if variazione < -0.02:
+                    ultimo = "Si è liberato parte del deminimis per scadenza dei 3 anni"
                 
                 body_lines.append(f"• Azienda: {ragione} (P.IVA: {cf})")
                 body_lines.append(f"  Totale Contributi: € {totale:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))

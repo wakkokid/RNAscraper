@@ -35,6 +35,7 @@ RNA_HEADERS = [
     "Ultimo Contributo Ricevuto",
     "Data Ultimo Controllo",
     "Novità",
+    "Variazione",
 ]
 
 # ─── Funzioni pubbliche ──────────────────────────────────────────────────────
@@ -143,6 +144,7 @@ def read_rna_tab(sh: Spreadsheet, tab_name: str = "RNA") -> dict[str, dict]:
             "ultimo_contributo": row[4] if len(row) > 4 else "",
             "data_controllo": row[5] if len(row) > 5 else "",
             "novita": row[6] if len(row) > 6 else "",
+            "variazione": row[7] if len(row) > 7 else "0",
         }
 
     logger.info("Righe %s esistenti caricate: %d", tab_name, len(existing))
@@ -171,18 +173,19 @@ def batch_update_rna(ws: Worksheet, rows_to_update: list[list], tab_name: str = 
     # Cancella tutto il contenuto dalla riga 2 in poi (mantiene header)
     # Poi scrive in blocco
     total_rows = len(rows_to_update)
-    # Calcola range: A2:G{2+total-1}
+    # Calcola range: A2:H{2+total-1}
     end_row = 1 + total_rows
-    range_notation = f"A2:G{end_row}"
+    range_notation = f"A2:H{end_row}"
 
     logger.info("Batch update %s: %d righe → range %s", tab_name, total_rows, range_notation)
     ws.update(range_name=range_notation, values=rows_to_update, value_input_option="RAW")
 
-    # Imposta formato valuta (Euro) con decimali per le colonne C (Totale Contributi) e D (Totale Ultimi 3 Anni)
+    # Imposta formato valuta (Euro) con decimali per le colonne C (Totale Contributi), D (Totale Ultimi 3 Anni) e H (Variazione)
     try:
         ws.format(f"C2:D{end_row}", {"numberFormat": {"type": "CURRENCY", "pattern": "#,##0.00 €"}})
+        ws.format(f"H2:H{end_row}", {"numberFormat": {"type": "CURRENCY", "pattern": "#,##0.00 €"}})
         ws.format(f"B2:B{end_row}", {"numberFormat": {"type": "TEXT"}})
-        logger.info("Formattazione valuta (#,##0.00 €) applicata su colonne C e D.")
+        logger.info("Formattazione valuta (#,##0.00 €) applicata su colonne C, D, e H.")
     except Exception as e:
         logger.warning("Impossibile applicare formato valuta: %s", e)
 
