@@ -89,7 +89,6 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
                 totale = comp.get("totale", 0.0)
                 cf = comp.get("cf", "N/D")
                 
-                body_lines.append(f"• Azienda: {ragione}")
                 body_lines.append(f"• Azienda: {ragione} (P.IVA: {cf})")
                 body_lines.append(f"  Totale Contributi: € {totale:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                 body_lines.append(f"  Ultimo Contributo: {ultimo}")
