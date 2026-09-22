@@ -58,6 +58,7 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
         smtp_port = config["smtp_port"]
         sender_email = config["sender_email"]
         sender_password = config["sender_password"]
+        sender_name = config.get("sender_name", "BOT notifiche RNA")
         recipient_email = config["recipient_email"]
         
         if sender_password == "INSERISCI_QUI_LA_TUA_PASSWORD":
@@ -107,8 +108,9 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
     
     msg = EmailMessage()
     msg.set_content(msg_text)
+    from email.utils import formataddr
     msg["Subject"] = subject
-    msg["From"] = sender_email
+    msg["From"] = formataddr((sender_name, sender_email))
     msg["To"] = recipient_email
 
     # Allega i file Excel (se presenti)
