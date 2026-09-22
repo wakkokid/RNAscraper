@@ -225,6 +225,10 @@ class RNAScraper:
         try:
             search_btn = page.locator("#reloadTable")
             search_btn.wait_for(state="visible", timeout=ELEMENT_TIMEOUT)
+            
+            from delay_manager import wait_micro
+            wait_micro(page)
+            
             search_btn.click()
             logger.debug("Pulsante ricerca cliccato.")
         except PlaywrightTimeoutError:
@@ -371,6 +375,9 @@ class RNAScraper:
 
                 logger.info("Tentativo download %s per CF=%s ...", ext.upper(), cf)
 
+                from delay_manager import wait_micro
+                wait_micro(page)
+
                 with page.expect_download(timeout=DOWNLOAD_TIMEOUT) as download_info:
                     btn.first.click()
 
@@ -402,6 +409,8 @@ class RNAScraper:
                 return None
 
             logger.info("Scaricamento file XLSX per CF=%s ...", cf)
+            from delay_manager import wait_micro
+            wait_micro(page)
             with page.expect_download(timeout=DOWNLOAD_TIMEOUT) as download_info:
                 btn.first.click()
 

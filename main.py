@@ -355,6 +355,11 @@ def run(args: argparse.Namespace) -> int:
             # Salva ogni 10 aziende
             if (i + 1) % 10 == 0:
                 do_batch_save()
+                
+            # Attesa umana (macro-delay) tra un'azienda e l'altra, se non è l'ultima
+            if i < len(aziende) - 1 and not abort_requested:
+                from delay_manager import wait_macro
+                wait_macro(scraper._page)
 
     # Salvataggio batch finale per quelle rimanenti (o in caso di abort)
     if len(scraped_cfs) > 0 and (len(scraped_cfs) % 10 != 0 or abort_requested):
