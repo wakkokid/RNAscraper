@@ -60,6 +60,7 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
         sender_password = config["sender_password"]
         sender_name = config.get("sender_name", "BOT notifiche RNA")
         recipient_email = config["recipient_email"]
+        gsheet_link = config.get("gsheet_link", "")
         
         if sender_password == "INSERISCI_QUI_LA_TUA_PASSWORD":
             logger.warning("Password email non configurata in %s. Invio mail ignorato.", CONFIG_PATH)
@@ -108,6 +109,13 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
     
     msg = EmailMessage()
     msg.set_content(msg_text)
+    
+    if gsheet_link:
+        msg_html = msg_text.replace("\n", "<br>")
+        msg_html = msg_html.replace("Google Sheets", f'<a href="{gsheet_link}">Google Sheets</a>')
+        html_content = f"<html><body>{msg_html}</body></html>"
+        msg.add_alternative(html_content, subtype='html')
+        
     from email.utils import formataddr
     msg["Subject"] = subject
     msg["From"] = formataddr((sender_name, sender_email))
