@@ -302,6 +302,10 @@ def run(args: argparse.Namespace) -> int:
             perc_str = f"{int((i / len(aziende)) * 100)}%"
             logger.info("[%d/%d] Elaborazione %s...", i + 1, len(aziende), cf)
             
+            if cf in scraped_cfs:
+                logger.info("  -> CF %s già elaborato in precedenza (doppione). Salto lo scraping per %s.", cf, azienda.get("ragione_sociale", ""))
+                continue
+            
             needs_deminimis = False
 
             # 1. Ricerca Generale RNA
