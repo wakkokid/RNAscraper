@@ -10,6 +10,7 @@ import logging
 import smtplib
 from email.message import EmailMessage
 from pathlib import Path
+from string import Template
 from typing import List, Tuple, Dict
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,17 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
         recipient_email = config["recipient_email"]
         gsheet_link = config.get("gsheet_link", "")
         
+        # Lettura template (con fallback ai default hardcoded se mancano)
+        mail_subj = config.get("mail_subj", "Notifica RNA: Aggiornamenti rilevati per $totale_aziende aziende")
+        mail_header = config.get("mail_header", "Ciao,\nil bot RNAscraper ha completato la scansione e ha rilevato aggiornamenti per le seguenti aziende:\n\n")
+        mail_company_template = config.get(
+            "mail_company_template", 
+            "=== Foglio: $foglio ===\n• Azienda: $ragione_sociale (P.IVA: $cf)\n  Totale Contributi: $totale (di cui ultimi 3 anni: $totale3y)\n  Ultimo Contributo: $ultimo_contributo\n\n"
+        )
+        mail_footer = config.get("mail_footer", "Puoi verificare i dettagli direttamente su Google Sheets.\nSaluti,\nIl Bot RNAscraper")
+        mail_subj_no_updates = config.get("mail_subj_no_updates", "Notifica RNA: Scansione completata (nessuna novità)")
+        mail_header_no_updates = config.get("mail_header_no_updates", "Ciao,\nil bot RNAscraper ha completato la scansione odierna.\nNon sono stati rilevati nuovi contributi o aggiornamenti per nessuna azienda.\n\n")
+        
         if sender_password == "INSERISCI_QUI_LA_TUA_PASSWORD":
             logger.warning("Password email non configurata in %s. Invio mail ignorato.", CONFIG_PATH)
             return
@@ -71,20 +83,27 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
         return
 
     # Costruisci il corpo del messaggio
-    body_lines = ["Ciao,"]
+    from datetime import datetime
+    data_odierna = datetime.now().strftime("%d/%m/%Y")
     
     total_companies = sum(len(companies) for _, companies in updates_by_category)
     
     if total_companies == 0:
-        body_lines.append("il bot RNAscraper ha completato la scansione odierna.")
-        body_lines.append("Non sono stati rilevati nuovi contributi o aggiornamenti per nessuna azienda.")
-        subject = "Notifica RNA: Scansione completata (nessuna novità)"
+        subject = Template(mail_subj_no_updates).safe_substitute(data_odierna=data_odierna)
+        msg_text = Template(mail_header_no_updates).safe_substitute(data_odierna=data_odierna)
     else:
-        body_lines.append("il bot RNAscraper ha completato la scansione e ha rilevato aggiornamenti sui contributi per le seguenti aziende:")
-        body_lines.append("")
+        subject = Template(mail_subj).safe_substitute(
+            totale_aziende=total_companies,
+            data_odierna=data_odierna
+        )
         
+        header_text = Template(mail_header).safe_substitute(
+            totale_aziende=total_companies,
+            data_odierna=data_odierna
+        )
+        
+        companies_text = ""
         for category, companies in updates_by_category:
-            body_lines.append(f"=== Foglio: {category} ===")
             for comp in companies:
                 ragione = comp.get("ragione", "Sconosciuta")
                 ultimo = comp.get("ultimo_contributo", "N/D")
@@ -96,21 +115,30 @@ def send_notification(updates_by_category: List[Tuple[str, List[Dict[str, str]]]
                 if variazione < -0.02:
                     ultimo = "Si è liberato parte del deminimis per scadenza dei 3 anni"
                 
-                body_lines.append(f"• Azienda: {ragione} (P.IVA: {cf})")
-                
                 tot_str = f"€ {totale:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                 u3a_str = f"€ {ultimi_3a:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                body_lines.append(f"  Totale Contributi: {tot_str} (di cui ultimi 3 anni: {u3a_str})")
+                var_str = f"€ {variazione:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                if variazione > 0:
+                    var_str = "+ " + var_str
                 
-                body_lines.append(f"  Ultimo Contributo: {ultimo}")
-                body_lines.append("")
+                comp_text = Template(mail_company_template).safe_substitute(
+                    foglio=category,
+                    ragione_sociale=ragione,
+                    cf=cf,
+                    totale=tot_str,
+                    totale3y=u3a_str,
+                    ultimo_contributo=ultimo,
+                    variazione=var_str
+                )
+                companies_text += comp_text
 
-        subject = f"Notifica RNA: Aggiornamenti rilevati per {total_companies} aziende"
+        footer_text = Template(mail_footer).safe_substitute(
+            totale_aziende=total_companies,
+            data_odierna=data_odierna
+        )
+        
+        msg_text = header_text + companies_text + footer_text
 
-    body_lines.append("Puoi verificare i dettagli direttamente su Google Sheets.")
-    body_lines.append("Saluti,\nIl Bot RNAscraper")
-    
-    msg_text = "\n".join(body_lines)
     
     msg = EmailMessage()
     msg.set_content(msg_text)
