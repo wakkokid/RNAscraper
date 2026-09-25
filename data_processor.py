@@ -287,20 +287,13 @@ def _find_last_contribution(
                 # Fallback: prende la prima colonna testuale
                 title = _get_first_text_value(df, max_date_idx)
 
-            amount = float(df.loc[max_date_idx, "_amount"])
-            amount_str = f"€ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            return f"{amount_str} - {title} ({date_str})" if title else f"{amount_str} ({date_str})"
+            return f"{title} ({date_str})" if title else date_str
 
     # Nessuna data disponibile: prende l'ultima riga
     if title_col and not df.empty:
         last_row = df.iloc[-1]
-        amount = float(last_row.get("_amount", 0.0))
-        amount_str = f"€ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        
         if pd.notna(last_row.get(title_col, None)):
-            title = str(last_row[title_col]).strip()
-            return f"{amount_str} - {title}"
-        return amount_str
+            return str(last_row[title_col]).strip()
 
     return "N/D"
 
