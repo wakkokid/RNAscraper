@@ -257,6 +257,12 @@ def run(args: argparse.Namespace) -> int:
     except Exception as e:
         logger.error("Errore lettura tab 'DeMinimis': %s. Procedo con stato vuoto.", e)
         existing_deminimis = {}
+        
+    try:
+        from sheets_client import init_log_tab
+        init_log_tab(sh)
+    except Exception as e:
+        logger.error("Errore inizializzazione tab 'Log': %s", e)
 
     # ── 4. Loop principale: scraping RNA ───────────────────────────────────
     results_rna: dict[str, Optional[RNAResult]] = {}

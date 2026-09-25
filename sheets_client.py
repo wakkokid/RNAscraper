@@ -201,25 +201,29 @@ LOG_HEADERS = [
     "Ultimo Contributo"
 ]
 
-def append_to_log_tab(sh: Spreadsheet, log_rows: list[list]) -> None:
-    """
-    Accoda le righe al tab 'Log'. Se non esiste, lo crea con le intestazioni.
-    """
-    if not log_rows:
-        return
-        
+def init_log_tab(sh: Spreadsheet) -> Worksheet:
+    """Inizializza il tab Log se non esiste e lo restituisce."""
     try:
         ws = sh.worksheet("Log")
+        return ws
     except gspread.WorksheetNotFound:
         logger.info("Tab 'Log' non trovato. Creazione in corso...")
         ws = sh.add_worksheet(title="Log", rows=1000, cols=len(LOG_HEADERS))
         ws.append_row(LOG_HEADERS, value_input_option="USER_ENTERED")
-        # Blocca la prima riga
         try:
             ws.freeze(rows=1)
         except Exception:
             pass
         logger.info("Tab 'Log' creato con successo.")
+        return ws
+
+def append_to_log_tab(sh: Spreadsheet, log_rows: list[list]) -> None:
+    """
+    Accoda le righe al tab 'Log'. Se non esiste, lo crea con le intestazioni.
+    """
+    ws = init_log_tab(sh)
+    if not log_rows:
+        return
         
     logger.info("Aggiunta di %d righe al tab 'Log'...", len(log_rows))
     try:
