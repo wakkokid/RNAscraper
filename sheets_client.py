@@ -191,3 +191,44 @@ def batch_update_rna(ws: Worksheet, rows_to_update: list[list], tab_name: str = 
 
     logger.info("Batch update completato su %s.", tab_name)
 
+LOG_HEADERS = [
+    "Data e Ora",
+    "Foglio Origine",
+    "Azienda",
+    "Codice Fiscale",
+    "Variazione",
+    "Totale Ultimi 3 Anni",
+    "Ultimo Contributo"
+]
+
+def append_to_log_tab(sh: Spreadsheet, log_rows: list[list]) -> None:
+    """
+    Accoda le righe al tab 'Log'. Se non esiste, lo crea con le intestazioni.
+    """
+    if not log_rows:
+        return
+        
+    try:
+        ws = sh.worksheet("Log")
+    except gspread.WorksheetNotFound:
+        logger.info("Tab 'Log' non trovato. Creazione in corso...")
+        ws = sh.add_worksheet(title="Log", rows=1000, cols=len(LOG_HEADERS))
+        ws.append_row(LOG_HEADERS, value_input_option="USER_ENTERED")
+        # Blocca la prima riga
+        try:
+            ws.freeze(rows=1)
+        except Exception:
+            pass
+        logger.info("Tab 'Log' creato con successo.")
+        
+    logger.info("Aggiunta di %d righe al tab 'Log'...", len(log_rows))
+    try:
+        ws.append_rows(log_rows, value_input_option="RAW")
+        
+        # Applica formattazione valuta alle colonne E ed F
+        ws.format("E2:F", {"numberFormat": {"type": "CURRENCY", "pattern": "#,##0.00 €"}})
+        # Applica formato testo alla colonna D (CF) per evitare problemi con gli zeri iniziali
+        ws.format("D2:D", {"numberFormat": {"type": "TEXT"}})
+    except Exception as e:
+        logger.error("Errore durante l'aggiornamento del tab 'Log': %s", e)
+

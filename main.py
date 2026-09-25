@@ -388,7 +388,7 @@ def run(args: argparse.Namespace) -> int:
     logger.info("  Totali aggiornati: %d", stats_deminimis["aggiornati"])
     logger.info("  Invariati:         %d", stats_deminimis["invariati"])
 
-    # ── 6. Invio Email di Notifica ─────────────────────────────────────────
+    # ── 6. Invio Email di Notifica e Log Storico ──────────────────────────────
     updates_to_send = []
     if stats_rna.get("dettagli_aggiornati"):
         updates_to_send.append(("Generale (RNA)", stats_rna["dettagli_aggiornati"]))
@@ -396,8 +396,32 @@ def run(args: argparse.Namespace) -> int:
         updates_to_send.append(("De Minimis", stats_deminimis["dettagli_aggiornati"]))
 
     if args.dry_run:
-        logger.info("DRY-RUN: Skip invio email di notifica.")
+        logger.info("DRY-RUN: Skip invio email di notifica e scrittura Log storico.")
     else:
+        # Costruisci righe per tab Log
+        if updates_to_send:
+            try:
+                from datetime import datetime
+                from sheets_client import append_to_log_tab
+                
+                timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                log_rows = []
+                for category, companies in updates_to_send:
+                    for comp in companies:
+                        log_rows.append([
+                            timestamp,
+                            category,
+                            comp.get("ragione", ""),
+                            comp.get("cf", ""),
+                            round(float(comp.get("variazione", 0.0)), 2),
+                            round(float(comp.get("ultimi_3a", 0.0)), 2),
+                            comp.get("ultimo_contributo", "")
+                        ])
+                append_to_log_tab(sh, log_rows)
+            except Exception as e:
+                logger.error("Impossibile salvare il log storico su Google Sheets: %s", e)
+                
+        # Invia email
         try:
             from mailer import send_notification
             send_notification(updates_to_send)
