@@ -227,7 +227,18 @@ def append_to_log_tab(sh: Spreadsheet, log_rows: list[list]) -> None:
         
     logger.info("Aggiunta di %d righe al tab 'Log'...", len(log_rows))
     try:
+        num_rows_before = len(ws.col_values(1))
         ws.append_rows(log_rows, value_input_option="RAW")
+        
+        # Merge verticale della colonna A (Data e Ora) se ci sono più righe
+        if len(log_rows) > 1:
+            start_row = num_rows_before + 1
+            end_row = num_rows_before + len(log_rows)
+            ws.merge_cells(f"A{start_row}:A{end_row}", merge_type='MERGE_COLUMNS')
+            ws.format(f"A{start_row}:A{end_row}", {
+                "verticalAlignment": "MIDDLE",
+                "horizontalAlignment": "CENTER"
+            })
         
         # Applica formattazione valuta alle colonne E ed F
         ws.format("E2:F", {"numberFormat": {"type": "CURRENCY", "pattern": "#,##0.00 €"}})
