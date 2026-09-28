@@ -200,7 +200,6 @@ def summarize_changes(rows: list[list]) -> dict:
         novita = row[6] if len(row) > 6 else ""
         ragione = row[0] if len(row) > 0 else "Sconosciuta"
         totale = float(row[2]) if len(row) > 2 else 0.0
-        ultimi_3a = float(row[3]) if len(row) > 3 else 0.0
         ultimo_contributo = row[4] if len(row) > 4 else "N/D"
         variazione = float(row[7]) if len(row) > 7 else 0.0
         
@@ -208,7 +207,6 @@ def summarize_changes(rows: list[list]) -> dict:
             "ragione": ragione,
             "cf": row[1] if len(row) > 1 else "",
             "totale": totale,
-            "ultimi_3a": ultimi_3a,
             "ultimo_contributo": ultimo_contributo,
             "variazione": variazione
         }
