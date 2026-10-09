@@ -396,10 +396,40 @@ def run(args: argparse.Namespace) -> int:
 
     # ── 6. Invio Email di Notifica e Log Storico ──────────────────────────────
     updates_to_send = []
-    if stats_rna.get("dettagli_aggiornati"):
-        updates_to_send.append(("Generale (RNA)", stats_rna["dettagli_aggiornati"]))
-    if stats_deminimis.get("dettagli_aggiornati"):
-        updates_to_send.append(("De Minimis", stats_deminimis["dettagli_aggiornati"]))
+    
+    rna_dict = {c["cf"]: c for c in stats_rna.get("dettagli_aggiornati", [])}
+    dem_dict = {c["cf"]: c for c in stats_deminimis.get("dettagli_aggiornati", [])}
+    all_cfs = set(rna_dict.keys()) | set(dem_dict.keys())
+    
+    email_rna_companies = []
+    email_dem_companies = []
+    
+    for cf in all_cfs:
+        r_comp = rna_dict.get(cf)
+        d_comp = dem_dict.get(cf)
+        
+        var_rna = r_comp["variazione"] if r_comp else 0.0
+        var_dem = d_comp["variazione"] if d_comp else 0.0
+        
+        include_rna = bool(r_comp)
+        include_dem = bool(d_comp)
+        
+        if r_comp:
+            if var_rna < 0:
+                include_rna = False
+            elif include_dem and var_rna > 0 and var_dem > 0 and abs(var_rna - var_dem) < 0.01:
+                # Se variazioni uguali e positive, omettiamo RNA e teniamo De Minimis
+                include_rna = False
+                
+        if include_rna:
+            email_rna_companies.append(r_comp)
+        if include_dem:
+            email_dem_companies.append(d_comp)
+
+    if email_rna_companies:
+        updates_to_send.append(("Generale (RNA)", email_rna_companies))
+    if email_dem_companies:
+        updates_to_send.append(("De Minimis", email_dem_companies))
 
     if args.dry_run:
         logger.info("DRY-RUN: Skip invio email di notifica e scrittura Log storico.")
